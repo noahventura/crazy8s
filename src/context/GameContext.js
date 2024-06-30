@@ -35,15 +35,16 @@ function shuffle(array) {
 }
 
 // src/context/GameContext.js
-
 const gameReducer = (state, action) => {
+    console.log('Current State:', state);
+    console.log('Action:', action);
+  
     switch (action.type) {
       case 'START_GAME':
         const players = state.players.map(player => ({
           ...player,
           hand: state.deck.splice(0, 5),
         }));
-        console.log('Game started, players initialized:', players);
         return {
           ...state,
           players,
@@ -51,6 +52,10 @@ const gameReducer = (state, action) => {
           discardPile: [state.deck.pop()],  // Initialize discard pile with one card from the deck
         };
       case 'DRAW_CARD':
+        if (state.deck.length === 0) {
+          console.error('No more cards in the deck');
+          return state;
+        }
         const updatedPlayers = state.players.map((player, index) => {
           if (index === state.currentPlayer) {
             return {
@@ -60,7 +65,6 @@ const gameReducer = (state, action) => {
           }
           return player;
         });
-        console.log('Card drawn, players updated:', updatedPlayers);
         return {
           ...state,
           players: updatedPlayers,
@@ -70,16 +74,20 @@ const gameReducer = (state, action) => {
         const { cardIndex } = action.payload;
         const playedCard = state.players[state.currentPlayer].hand[cardIndex];
   
-        // Check if the discard pile is empty
-        if (state.discardPile.length > 0) {
-          const topDiscard = state.discardPile[state.discardPile.length - 1];
-          const isValidMove =
-            playedCard.rank === topDiscard.rank || playedCard.suit === topDiscard.suit;
+        if (!playedCard) {
+          console.error('Invalid card index:', cardIndex);
+          return state;
+        }
   
-          if (!isValidMove) {
-            console.log('Invalid move:', playedCard, 'Top of discard pile:', topDiscard);
-            return state; // Invalid move, do nothing
-          }
+        const topDiscard = state.discardPile[state.discardPile.length - 1];
+        const isValidMove =
+          playedCard.rank === topDiscard.rank || 
+          playedCard.suit === (state.nextSuit || topDiscard.suit) ||
+          playedCard.rank === '8';
+  
+        if (!isValidMove) {
+          console.error('Invalid move:', playedCard);
+          return state; // Invalid move, do nothing
         }
   
         const newPlayers = state.players.map((player, index) => {
@@ -94,18 +102,37 @@ const gameReducer = (state, action) => {
           return player;
         });
   
-        console.log('Card played:', playedCard);
+        if (playedCard.rank === '8') {
+          return {
+            ...state,
+            players: newPlayers,
+            discardPile: [...state.discardPile, playedCard],
+            currentPlayer: (state.currentPlayer + 1) % state.players.length,
+            choosingSuit: true,
+          };
+        }
+  
         return {
           ...state,
           players: newPlayers,
           discardPile: [...state.discardPile, playedCard],
           currentPlayer: (state.currentPlayer + 1) % state.players.length,
+          nextSuit: playedCard.suit,
         };
-      // Add more cases for other game actions
+  
+      case 'CHOOSE_SUIT':
+        const { suit } = action.payload;
+        return {
+          ...state,
+          choosingSuit: false,
+          nextSuit: suit,
+        };
+  
       default:
         return state;
     }
   };
+  
   
   export const GameProvider = ({ children }) => {
     const [state, dispatch] = useReducer(gameReducer, initialState);
