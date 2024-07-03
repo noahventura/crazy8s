@@ -1,4 +1,3 @@
-// src/context/GameContext.js
 import React, { createContext, useReducer, useContext } from 'react';
 
 const GameContext = createContext();
@@ -6,10 +5,13 @@ const GameContext = createContext();
 const initialState = {
   players: [{ hand: [] }],  // Assuming a single player for simplicity
   deck: generateDeck(),
-  discardPile: [],
+  discardPile: [generateDeck().pop()],
   currentPlayer: 0,
   gameStarted: false,
   gameOver: false,
+  currentSuit: null,
+  currentRank: null,
+  topDiscardCard: null, // Add this line
 };
 
 function generateDeck() {
@@ -34,28 +36,23 @@ function shuffle(array) {
   return array;
 }
 
-// src/context/GameContext.js
 const gameReducer = (state, action) => {
-    console.log('Current State:', state);
-    console.log('Action:', action);
-  
     switch (action.type) {
       case 'START_GAME':
         const players = state.players.map(player => ({
           ...player,
           hand: state.deck.splice(0, 5),
         }));
+        const firstCard = state.discardPile[0];
         return {
           ...state,
           players,
           gameStarted: true,
-          discardPile: [state.deck.pop()],  // Initialize discard pile with one card from the deck
+          currentSuit: firstCard.suit,
+          currentRank: firstCard.rank,
+          topDiscardCard: firstCard,
         };
       case 'DRAW_CARD':
-        if (state.deck.length === 0) {
-          console.error('No more cards in the deck');
-          return state;
-        }
         const updatedPlayers = state.players.map((player, index) => {
           if (index === state.currentPlayer) {
             return {
@@ -68,32 +65,13 @@ const gameReducer = (state, action) => {
         return {
           ...state,
           players: updatedPlayers,
-          currentPlayer: (state.currentPlayer + 1) % state.players.length,
         };
       case 'PLAY_CARD':
         const { cardIndex } = action.payload;
-        const playedCard = state.players[state.currentPlayer].hand[cardIndex];
-  
-        if (!playedCard) {
-          console.error('Invalid card index:', cardIndex);
-          return state;
-        }
-  
-        const topDiscard = state.discardPile[state.discardPile.length - 1];
-        const isValidMove =
-          playedCard.rank === topDiscard.rank || 
-          playedCard.suit === (state.nextSuit || topDiscard.suit) ||
-          playedCard.rank === '8';
-  
-        if (!isValidMove) {
-          console.error('Invalid move:', playedCard);
-          return state; // Invalid move, do nothing
-        }
-  
         const newPlayers = state.players.map((player, index) => {
           if (index === state.currentPlayer) {
             const newHand = [...player.hand];
-            newHand.splice(cardIndex, 1);
+            const playedCard = newHand.splice(cardIndex, 1)[0];
             return {
               ...player,
               hand: newHand,
@@ -102,49 +80,42 @@ const gameReducer = (state, action) => {
           return player;
         });
   
-        if (playedCard.rank === '8') {
-          return {
-            ...state,
-            players: newPlayers,
-            discardPile: [...state.discardPile, playedCard],
-            currentPlayer: (state.currentPlayer + 1) % state.players.length,
-            choosingSuit: true,
-          };
-        }
+        const playedCard = state.players[state.currentPlayer].hand[cardIndex];
+        const gameOver = newPlayers[state.currentPlayer].hand.length === 0;
   
         return {
           ...state,
           players: newPlayers,
           discardPile: [...state.discardPile, playedCard],
-          currentPlayer: (state.currentPlayer + 1) % state.players.length,
-          nextSuit: playedCard.suit,
+          currentSuit: playedCard.rank === '8' ? state.currentSuit : playedCard.suit,
+          currentRank: playedCard.rank,
+          currentPlayer: gameOver ? state.currentPlayer : (state.currentPlayer + 1) % state.players.length,
+          topDiscardCard: playedCard,
+          gameOver: gameOver, // Update the game over state
         };
-  
-      case 'CHOOSE_SUIT':
-        const { suit } = action.payload;
+      case 'SET_SUIT':
         return {
           ...state,
-          choosingSuit: false,
-          nextSuit: suit,
+          currentSuit: action.payload.newSuit,
+          currentPlayer: (state.currentPlayer + 1) % state.players.length,
         };
-  
       default:
         return state;
     }
   };
   
   
-  export const GameProvider = ({ children }) => {
-    const [state, dispatch] = useReducer(gameReducer, initialState);
-  
-    return (
-      <GameContext.Provider value={{ state, dispatch }}>
-        {children}
-      </GameContext.Provider>
-    );
-  };
-  
-  export const useGameContext = () => {
-    return useContext(GameContext);
-  };
-  
+
+export const GameProvider = ({ children }) => {
+  const [state, dispatch] = useReducer(gameReducer, initialState);
+
+  return (
+    <GameContext.Provider value={{ state, dispatch }}>
+      {children}
+    </GameContext.Provider>
+  );
+};
+
+export const useGameContext = () => {
+  return useContext(GameContext);
+};
