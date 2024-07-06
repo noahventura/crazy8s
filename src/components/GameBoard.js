@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// GameBoard.js
+import React from 'react';
 import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
@@ -6,24 +7,19 @@ import { useGameContext } from '../context/GameContext';
 
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
-const GameBoard = () => {
+const GameBoard = ({ ws }) => {
   const { state, dispatch } = useGameContext();
-  const [selectingSuit, setSelectingSuit] = useState(false);
 
   const startGame = () => {
-    dispatch({ type: 'START_GAME' });
+    ws.send(JSON.stringify({ type: 'START_GAME' }));
   };
 
   const drawCard = () => {
-    dispatch({ type: 'DRAW_CARD' });
+    ws.send(JSON.stringify({ type: 'DRAW_CARD', playerId: state.currentPlayer }));
   };
 
   const handleSuitSelection = (suit) => {
-    dispatch({
-      type: 'SET_SUIT',
-      payload: { newSuit: suit },
-    });
-    setSelectingSuit(false);
+    ws.send(JSON.stringify({ type: 'SET_SUIT', newSuit: suit }));
   };
 
   return (
@@ -41,7 +37,7 @@ const GameBoard = () => {
                 <h2>Current Player: Player {state.currentPlayer + 1}</h2>
                 <CurrentPlayableCard />
               </div>
-              {selectingSuit ? (
+              {state.selectingSuit ? (
                 <div>
                   <h3>Select a new suit:</h3>
                   {suits.map((suit) => (
@@ -53,7 +49,7 @@ const GameBoard = () => {
               ) : (
                 <>
                   <div className="player-hand">
-                    <PlayerHand setSelectingSuit={setSelectingSuit} />
+                    <PlayerHand />
                   </div>
                   <button onClick={drawCard}>Draw Card</button>
                 </>

@@ -1,29 +1,28 @@
+// main.js
 const { app, BrowserWindow } = require('electron');
+const path = require('path');
 
-async function createWindow() {
-  const isDev = (await import('electron-is-dev')).default;
-
+function createWindow() {
   const win = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
-  if (isDev) {
-    win.loadURL('http://localhost:3000');
-  } else {
-    win.loadFile('index.html');
-  }
-
-  if (isDev) {
-    win.webContents.openDevTools();
-  }
+  win.loadURL('http://localhost:3000');
 }
 
-app.on('ready', createWindow);
+app.whenReady().then(() => {
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -31,8 +30,24 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+// preload.js
+const { contextBridge } = require('electron');
+const WebSocket = require('ws');
+
+contextBridge.exposeInMainWorld('api', {
+  connectToServer: () => {
+    const ws = new WebSocket('ws://localhost:8080');
+    
+    ws.onopen = () => {
+      console.log('Connected to server');
+    };
+
+    ws.onmessage = (message) => {
+      const data = JSON.parse(message.data);
+      // Handle server messages
+      console.log('Received message:', data);
+    };
+
+    return ws;
+  },
 });
