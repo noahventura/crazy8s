@@ -1,121 +1,60 @@
-import React, { createContext, useReducer, useContext } from 'react';
+// src/context/GameContext.js
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { connectToServer, getSocket } from '../socket';
 
 const GameContext = createContext();
 
 const initialState = {
-  players: [{ hand: [] }],  // Assuming a single player for simplicity
-  deck: generateDeck(),
-  discardPile: [generateDeck().pop()],
-  currentPlayer: 0,
   gameStarted: false,
   gameOver: false,
-  currentSuit: null,
-  currentRank: null,
-  topDiscardCard: null, // Add this line
+  currentPlayer: 0,
+  currentRank: '',
+  currentSuit: '',
+  topDiscardCard: null,
+  selectingSuit: false,
+  players: [],
 };
 
-function generateDeck() {
-  const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
-  const ranks = [
-    '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'
-  ];
-  const deck = [];
-  for (let suit of suits) {
-    for (let rank of ranks) {
-      deck.push({ suit, rank });
-    }
+const reducer = (state, action) => {
+  switch (action.type) {
+    case 'START_GAME':
+      return { ...state, gameStarted: true };
+    case 'DRAW_CARD':
+      return state;
+    case 'SET_SUIT':
+      return { ...state, currentSuit: action.payload.newSuit };
+    case 'UPDATE_STATE':
+      return { ...state, ...action.payload };
+    default:
+      return state;
   }
-  return shuffle(deck);
-}
-
-function shuffle(array) {
-  for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
-  }
-  return array;
-}
-
-const gameReducer = (state, action) => {
-    switch (action.type) {
-      case 'START_GAME':
-        const players = state.players.map(player => ({
-          ...player,
-          hand: state.deck.splice(0, 5),
-        }));
-        const firstCard = state.discardPile[0];
-        return {
-          ...state,
-          players,
-          gameStarted: true,
-          currentSuit: firstCard.suit,
-          currentRank: firstCard.rank,
-          topDiscardCard: firstCard,
-        };
-      case 'DRAW_CARD':
-        const updatedPlayers = state.players.map((player, index) => {
-          if (index === state.currentPlayer) {
-            return {
-              ...player,
-              hand: [...player.hand, state.deck.pop()],
-            };
-          }
-          return player;
-        });
-        return {
-          ...state,
-          players: updatedPlayers,
-        };
-      case 'PLAY_CARD':
-        const { cardIndex } = action.payload;
-        const newPlayers = state.players.map((player, index) => {
-          if (index === state.currentPlayer) {
-            const newHand = [...player.hand];
-            const playedCard = newHand.splice(cardIndex, 1)[0];
-            return {
-              ...player,
-              hand: newHand,
-            };
-          }
-          return player;
-        });
-  
-        const playedCard = state.players[state.currentPlayer].hand[cardIndex];
-        const gameOver = newPlayers[state.currentPlayer].hand.length === 0;
-  
-        return {
-          ...state,
-          players: newPlayers,
-          discardPile: [...state.discardPile, playedCard],
-          currentSuit: playedCard.rank === '8' ? state.currentSuit : playedCard.suit,
-          currentRank: playedCard.rank,
-          currentPlayer: gameOver ? state.currentPlayer : (state.currentPlayer + 1) % state.players.length,
-          topDiscardCard: playedCard,
-          gameOver: gameOver, // Update the game over state
-        };
-      case 'SET_SUIT':
-        return {
-          ...state,
-          currentSuit: action.payload.newSuit,
-          currentPlayer: (state.currentPlayer + 1) % state.players.length,
-        };
-      default:
-        return state;
-    }
-  };
-  
-  
+};
 
 export const GameProvider = ({ children }) => {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  useEffect(() => {
+    connectToServer();
+    const socket = getSocket();
+
+    if (socket) {
+      socket.on('GAME_STATE_UPDATE', (newState) => {
+        dispatch({ type: 'UPDATE_STATE', payload: newState });
+      });
+    }
+
+  }, []);
+
+  const contextValue = {
+    state,
+    dispatch,
+  };
 
   return (
-    <GameContext.Provider value={{ state, dispatch }}>
+    <GameContext.Provider value={contextValue}>
       {children}
     </GameContext.Provider>
   );
 };
 
-export const useGameContext = () => {
-  return useContext(GameContext);
-};
+export const useGameContext = () => useContext(GameContext);

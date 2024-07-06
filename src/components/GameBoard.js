@@ -4,6 +4,7 @@ import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
 import { useGameContext } from '../context/GameContext';
+import { connectToServer } from '../socket'; // Import connectToServer
 
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
