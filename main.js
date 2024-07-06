@@ -1,23 +1,26 @@
 const { app, BrowserWindow } = require('electron');
-const path = require('path');
 
 async function createWindow() {
-  const { default: isDev } = await import('electron-is-dev');
+  const isDev = (await import('electron-is-dev')).default;
 
   const win = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: true,
+      contextIsolation: false,
     },
   });
 
-  win.loadURL(
-    isDev
-      ? 'http://localhost:3000'
-      : `file://${path.join(__dirname, 'build/index.html')}`
-  );
+  if (isDev) {
+    win.loadURL('http://localhost:3000');
+  } else {
+    win.loadFile('index.html');
+  }
+
+  if (isDev) {
+    win.webContents.openDevTools();
+  }
 }
 
 app.on('ready', createWindow);
