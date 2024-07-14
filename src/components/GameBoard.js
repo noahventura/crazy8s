@@ -1,27 +1,73 @@
-// GameBoard.js
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import io from 'socket.io-client'; // Import socket.io-client directly
 import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
 import { useGameContext } from '../context/GameContext';
-import { connectToServer } from '../socket'; // Import connectToServer
 
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
-const GameBoard = ({ ws }) => {
+const GameBoard = () => { 
   const { state, dispatch } = useGameContext();
+  const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    const newSocket = io('http://localhost:8080'); // Connect to your server
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      console.log('Connected to server from GameBoard'); 
+      setIsConnected(true);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setIsConnected(false);
+    });
+
+    // Cleanup on component unmount
+    return () => { 
+      newSocket.disconnect();
+    };
+  }, []); 
+
+  useEffect(() => {
+    if (isConnected && socket) {
+      socket.on('GAME_STATE_UPDATE', (newState) => {
+        dispatch({ type: 'UPDATE_STATE', payload: newState });
+      });
+    }
+  }, [isConnected, socket]);
 
   const startGame = () => {
-    ws.send(JSON.stringify({ type: 'START_GAME' }));
+    if (isConnected && socket) {
+      console.log('Sending START_GAME event to server');
+      socket.emit('START_GAME'); 
+    } else {
+      console.error('WebSocket is not open yet!');
+    }
   };
 
+  // *** Corrected drawCard and handleSuitSelection functions ***
   const drawCard = () => {
-    ws.send(JSON.stringify({ type: 'DRAW_CARD', playerId: state.currentPlayer }));
+    console.log('Draw Card button clicked');
+    if (isConnected && socket) {
+      socket.emit('DRAW_CARD', { playerId: state.currentPlayer }); // Use socket.emit 
+    } else {
+      console.log('WebSocket is not open yet!');
+    }
   };
 
   const handleSuitSelection = (suit) => {
-    ws.send(JSON.stringify({ type: 'SET_SUIT', newSuit: suit }));
+    console.log('Suit selection button clicked:', suit);
+    if (isConnected && socket) {
+      socket.emit('SET_SUIT', { newSuit: suit }); // Use socket.emit
+    } else {
+      console.log('WebSocket is not open yet!');
+    }
   };
+
 
   return (
     <div className="game-board">

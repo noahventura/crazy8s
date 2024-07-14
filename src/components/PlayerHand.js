@@ -7,6 +7,7 @@ const PlayerHand = ({ setSelectingSuit }) => {
   const playerHand = state.players[state.currentPlayer]?.hand || [];
 
   const playCard = (index) => {
+    console.log('playCard function called with index:', index); 
     const playedCard = playerHand[index];
     if (
       playedCard.rank === '8' ||

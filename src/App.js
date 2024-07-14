@@ -1,4 +1,3 @@
-// App.js
 import React, { useEffect, useState } from 'react';
 import GameBoard from './components/GameBoard';
 import { GameProvider } from './context/GameContext';
@@ -6,6 +5,7 @@ import { connectToServer, getSocket } from './socket';
 
 function App() {
   const [ws, setWs] = useState(null);
+  const [isConnected, setIsConnected] = useState(false); // Add connection status state
 
   useEffect(() => {
     connectToServer();
@@ -13,11 +13,16 @@ function App() {
     setWs(socket);
 
     if (socket) {
-      socket.on('message', (message) => {
-        const data = JSON.parse(message.data);
-        if (data.type === 'INIT' || data.type === 'GAME_STATE') {
-          // Update game state
-        }
+      socket.on('connect', () => {
+        console.log('Connected to server');
+        setIsConnected(true); // Update connection status
+      });
+
+      // ... (other event listeners)
+
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        setIsConnected(false); // Update connection status
       });
     }
   }, []);
@@ -25,7 +30,11 @@ function App() {
   return (
     <GameProvider>
       <div className="App">
-        <GameBoard ws={ws} />
+        {isConnected ? ( // Conditionally render GameBoard
+          <GameBoard ws={ws} isConnected={isConnected}/>
+        ) : (
+          <p>Connecting to server...</p>
+        )}
       </div>
     </GameProvider>
   );
