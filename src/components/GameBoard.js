@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import io from 'socket.io-client'; // Import socket.io-client directly
+import io from 'socket.io-client'; 
 import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
@@ -8,7 +8,7 @@ import { useGameContext } from '../context/GameContext';
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
 const GameBoard = () => { 
-  const { state, dispatch } = useGameContext();
+  const { state, dispatch, setSelectingSuit } = useGameContext();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -19,6 +19,8 @@ const GameBoard = () => {
     newSocket.on('connect', () => {
       console.log('Connected to server from GameBoard'); 
       setIsConnected(true);
+
+      console.log('Socket object:',newSocket)
     });
 
     newSocket.on('disconnect', () => {
@@ -96,7 +98,7 @@ const GameBoard = () => {
               ) : (
                 <>
                   <div className="player-hand">
-                    <PlayerHand />
+                    <PlayerHand setSelectingSuit={setSelectingSuit}/>
                   </div>
                   <button onClick={drawCard}>Draw Card</button>
                 </>

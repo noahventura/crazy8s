@@ -31,7 +31,7 @@ function App() {
     <GameProvider>
       <div className="App">
         {isConnected ? ( // Conditionally render GameBoard
-          <GameBoard ws={ws} isConnected={isConnected}/>
+          <GameBoard />
         ) : (
           <p>Connecting to server...</p>
         )}
