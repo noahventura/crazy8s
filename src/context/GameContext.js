@@ -10,7 +10,7 @@ const initialState = {
   currentRank: '',
   currentSuit: '',
   topDiscardCard: null,
-  selectingSuit: false, // This is already here, you are right!
+  selectingSuit: false,
   players: [],
 };
 
@@ -31,13 +31,13 @@ const reducer = (state, action) => {
       const newPlayers = [...state.players];
       const playerHand = newPlayers[currentPlayerIndex].hand;
     
-      // 3. Take a card from the deck
+      // Take a card from the deck
       const drawnCard = state.deck.pop(); 
     
-      // 4. Add the drawn card to the player's hand
+      // Add the drawn card to the player's hand
       playerHand.push(drawnCard); 
     
-      // 5. Update the game state
+      //Update the game state
       return {
         ...state,
         deck: [...state.deck], // Create a new deck array (optional but good practice)
@@ -49,13 +49,16 @@ const reducer = (state, action) => {
     case 'UPDATE_STATE':
       return { ...state, ...action.payload };
     case 'PLAY_CARD': {
+      console.log('PLAY_CARD action received in reducer.');
+      console.log('Action payload:', action.payload);
+      console.log('State before update:', state);
       const { cardIndex } = action.payload;
       const currentPlayer = state.currentPlayer;
 
       // Create a new array of players to avoid mutating state directly
       const newPlayers = [...state.players];
       const playedCard = newPlayers[currentPlayer].hand.splice(cardIndex, 1)[0];
-
+      console.log('State after update:', state);
       return {
         ...state,
         players: newPlayers,
@@ -77,12 +80,24 @@ export const GameProvider = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [selectingSuit, setSelectingSuit] = useState(initialState.selectingSuit);
   const [socket, setSocket] = useState(null); 
+  const [isConnected, setIsConnected]= useState(false);
 
   useEffect(() => {
     connectToServer();
     const newSocket = getSocket();
     setSocket(newSocket)
 
+    if (newSocket) {
+      newSocket.on('connect', () => {
+        console.log('Connected to server');
+        setIsConnected(true); // Update isConnected here
+      });
+
+      newSocket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        setIsConnected(false); // Update isConnected here
+      });
+    }
     if (newSocket) {
       newSocket.on('GAME_STATE_UPDATE', (newState) => {
         dispatch({ type: 'UPDATE_STATE', payload: newState });
@@ -97,6 +112,7 @@ export const GameProvider = ({ children }) => {
     selectingSuit,       
     setSelectingSuit, 
     socket,   
+    isConnected,
   };
 
   return (

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import io from 'socket.io-client'; 
 import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
@@ -8,31 +7,31 @@ import { useGameContext } from '../context/GameContext';
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
 const GameBoard = () => { 
-  const { state, dispatch, setSelectingSuit } = useGameContext();
-  const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const { state, dispatch, setSelectingSuit,socket,isConnected } = useGameContext();
+
 
   useEffect(() => {
-    const newSocket = io('http://localhost:8080'); // Connect to your server
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
+  
+    if (socket){
+    socket.on('connect', () => {
       console.log('Connected to server from GameBoard'); 
-      setIsConnected(true);
-
-      console.log('Socket object:',newSocket)
+      //setIsConnected(true);
+      console.log('Socket object:',socket)
     });
-
-    newSocket.on('disconnect', () => {
+  
+    socket.on('disconnect', () => {
       console.log('Disconnected from server');
-      setIsConnected(false);
+      //setIsConnected(false);
     });
 
     // Cleanup on component unmount
     return () => { 
-      newSocket.disconnect();
+      if (socket){
+      socket.disconnect();
+      }
     };
-  }, []); 
+  }
+  }, [socket]); 
 
   useEffect(() => {
     if (isConnected && socket) {
@@ -55,7 +54,7 @@ const GameBoard = () => {
   const drawCard = () => {
     console.log('Draw Card button clicked');
     if (isConnected && socket) {
-      socket.emit('DRAW_CARD', { playerId: state.currentPlayer }); // Use socket.emit 
+      socket.emit('DRAW_CARD'); // Use socket.emit 
     } else {
       console.log('WebSocket is not open yet!');
     }
@@ -79,11 +78,11 @@ const GameBoard = () => {
       ) : (
         <div>
           {state.gameOver ? (
-            <h2>Game Over! Player {state.currentPlayer + 1} wins!</h2>
+            <h2>Game Over! Player 1 wins!</h2>
           ) : (
             <div>
               <div>
-                <h2>Current Player: Player {state.currentPlayer + 1}</h2>
+                <h2>Current Player: Player 1</h2>
                 <CurrentPlayableCard />
               </div>
               {state.selectingSuit ? (
