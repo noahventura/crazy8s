@@ -20,27 +20,25 @@ const reducer = (state, action) => {
     case 'START_GAME':
       return { ...state, gameStarted: true };
     case 'DRAW_CARD': {
-      // 1. Check if the deck is empty (you might need to handle this case differently)
       if (state.deck.length === 0) {
-        // Handle empty deck (e.g., shuffle discard pile back into the deck)
+      
         return state; // Or return a modified state
       }
     
-      // 2. Get the current player's hand
+
       const currentPlayerIndex = state.currentPlayer; 
       const newPlayers = [...state.players];
       const playerHand = newPlayers[currentPlayerIndex].hand;
     
-      // Take a card from the deck
+  
       const drawnCard = state.deck.pop(); 
-    
-      // Add the drawn card to the player's hand
+
       playerHand.push(drawnCard); 
     
       //Update the game state
       return {
         ...state,
-        deck: [...state.deck], // Create a new deck array (optional but good practice)
+        deck: [...state.deck], 
         players: newPlayers,
       };
     }

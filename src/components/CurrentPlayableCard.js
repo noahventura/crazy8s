@@ -5,10 +5,9 @@ const CurrentPlayableCard = () => {
   const { state } = useGameContext();
 
   
-  const topCard = state.topDiscardCard; // Access topDiscardCard directly
+  const topCard = state.topDiscardCard; 
 
   if (!topCard) {
-    // Either return null or render a placeholder if topDiscardCard is undefined
     return null; 
   }
 
