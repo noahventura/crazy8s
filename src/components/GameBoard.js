@@ -3,12 +3,14 @@ import PlayerHand from './PlayerHand';
 import Card from './Card';
 import CurrentPlayableCard from './CurrentPlayableCard';
 import { useGameContext } from '../context/GameContext';
+import { v4 as uuidv4 } from 'uuid';
 
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
 const GameBoard = () => { 
   const { state, dispatch, setSelectingSuit,socket,isConnected } = useGameContext();
-
+  const [playerName, setPlayerName] = useState('');
+  const [lobbyPlayers, setLobbyPlayers] = useState([]);
 
   useEffect(() => {
   
@@ -30,8 +32,11 @@ const GameBoard = () => {
       socket.disconnect();
       }
     };
+    socket.on('LOBBY_UPDATED', (lobbyData) => {
+      setLobbyPlayers(lobbyData); 
+    });
   }
-  }, [socket]); 
+}, [socket]);
 
   useEffect(() => {
     if (isConnected && socket) {
@@ -41,6 +46,15 @@ const GameBoard = () => {
     }
   }, [isConnected, socket]);
 
+  const joinLobby = () =>{
+    if (isConnected && socket){
+      if (playerName) {
+        const playerId = uuidv4(); // Generate playerId
+        const playerData = { id: playerId, name: playerName };
+        socket.emit('JOIN_LOBBY', playerData);
+    }
+  }
+}
   const startGame = () => {
     if (isConnected && socket) {
       console.log('Sending START_GAME event to server');
@@ -73,13 +87,28 @@ const GameBoard = () => {
   return (
     <div className="game-board">
       <h1>Crazy 8's</h1>
+
       {!state.gameStarted ? (
-        <button onClick={startGame}>Start Game</button>
-      ) : (
         <div>
-          {state.gameOver ? (
-            <h2>Game Over! Player 1 wins!</h2>
-          ) : (
+          <input 
+            type="text" 
+            placeholder="Enter your name" 
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+          />
+          <button onClick={joinLobby}>Join Lobby</button>
+          <h3>Players in Lobby:</h3>
+          <ul>
+            {lobbyPlayers.map((player) => (
+              <li key={player.id}>{player.name}</li>
+            ))}
+          </ul>
+        </div>
+       ) : (
+         <div> 
+           {state.gameOver ? (
+             <h2>Game Over! Player 1 wins!</h2>
+           ) : (
             <div>
               <div>
                 <h2>Current Player: Player 1</h2>

@@ -41,20 +41,41 @@ let gameState = {
   ],
   deck: [],
   discardPile: [],
+  lobby:[],
 };
 
 io.on('connection', (socket) => {
-  console.log('a user connected', socket.id);
+    console.log('a user connected', socket.id);
 
-  socket.on('START_GAME', () => {
-    console.log('START_GAME event received from client:', socket.id);
-    gameState.gameStarted = true;
-    gameState.deck = shuffleDeck();
-    dealCards(gameState.players, gameState.deck);
-    gameState.topDiscardCard = gameState.deck.pop();
-    gameState.currentRank = gameState.topDiscardCard.rank;
-    gameState.currentSuit = gameState.topDiscardCard.suit;
-    io.emit('GAME_STATE_UPDATE', gameState);
+    socket.on('JOIN_LOBBY', (playerData) =>{
+        console.log('Player joined the lobby:', playerData);
+        gameState.lobby.push(playerData); 
+        io.emit('LOBBY_UPDATED', gameState.lobby);
+    });
+
+    socket.on('START_GAME', () => {
+        console.log('START_GAME event received from client:', socket.id);
+        if(gameState.gameStarted){
+            return
+        }
+
+        const requiredPlayers = 1; // min player count
+        if (gameState.lobby.length < requiredPlayers) {
+          console.log('Not enough players in the lobby to start the game.');
+          socket.emit('NOT_ENOUGH_PLAYERS'); // Optional client notification
+          return;
+        }
+
+        gameState.players = gameState.lobby; 
+        gameState.lobby = []; // Clear the lobby
+        
+        gameState.gameStarted = true;
+        gameState.deck = shuffleDeck();
+        dealCards(gameState.players, gameState.deck);
+        gameState.topDiscardCard = gameState.deck.pop();
+        gameState.currentRank = gameState.topDiscardCard.rank;
+        gameState.currentSuit = gameState.topDiscardCard.suit;
+        io.emit('GAME_STATE_UPDATE', gameState);
   });
 
   socket.on('DRAW_CARD', () => {
