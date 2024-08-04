@@ -124,6 +124,12 @@ io.on('connection', (socket) => {
           // No need to update currentPlayer in single-player
         }
 
+        if (player.hand.length === 0) {
+            console.log('Player', playerId, 'has won the game!');
+            gameState.gameOver = true;
+            //handle game over 
+          }
+
         console.log('Game state after update:', gameState);
         io.emit('GAME_STATE_UPDATE', gameState); 
       } else {
@@ -143,8 +149,21 @@ io.on('connection', (socket) => {
     gameState.currentSuit = newSuit;
     gameState.currentRank = '';
     gameState.selectingSuit = false;
-    // No need to update currentPlayer in single-player
+    // No need to update currentPlayer in single player
     io.emit('GAME_STATE_UPDATE', gameState);
+  });
+  socket.on('CHECK_GAME_OVER', (data) => {
+    const playerId = data.playerId;
+    const player = gameState.players.find(p => p.id === playerId);
+  
+    if (player && player.hand.length === 0) {
+      console.log('Player', playerId, 'has won the game!');
+      gameState.gameOver = true; 
+      // reset game
+  
+      io.emit('GAME_STATE_UPDATE', gameState);
+    } 
+
   });
 
   socket.on('disconnect', () => {
