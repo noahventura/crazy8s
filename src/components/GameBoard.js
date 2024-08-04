@@ -25,16 +25,17 @@ const GameBoard = () => {
       console.log('Disconnected from server');
       //setIsConnected(false);
     });
-
+    
+    socket.on('LOBBY_UPDATED', (lobbyData) => {
+      setLobbyPlayers(lobbyData); 
+    });
     // Cleanup on component unmount
     return () => { 
       if (socket){
       socket.disconnect();
       }
     };
-    socket.on('LOBBY_UPDATED', (lobbyData) => {
-      setLobbyPlayers(lobbyData); 
-    });
+
   }
 }, [socket]);
 
@@ -103,6 +104,10 @@ const GameBoard = () => {
               <li key={player.id}>{player.name}</li>
             ))}
           </ul>
+          {/* Show "Start Game" button after joining the lobby */}
+          {lobbyPlayers.length > 0 && ( // Check if there are players in the lobby
+            <button onClick={startGame}>Start Game</button>
+          )}
         </div>
        ) : (
          <div> 
