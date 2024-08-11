@@ -21,6 +21,7 @@ const PlayerHand = ({ setSelectingSuit }) => {
       }
       console.log("Socket object before emitting PLAY_CARD:", socket);
       socket.emit('PLAY_CARD', { playerId: 1, cardIndex: index }); // playerId is always 1
+      socket.emit('CHECK_GAME_OVER', { playerId: 1 }); 
     }
   };
 

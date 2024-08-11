@@ -30,24 +30,3 @@ app.on('window-all-closed', () => {
   }
 });
 
-// preload.js
-const { contextBridge } = require('electron');
-const WebSocket = require('ws');
-
-contextBridge.exposeInMainWorld('api', {
-  connectToServer: () => {
-    const ws = new WebSocket('ws://localhost:8080');
-    
-    ws.onopen = () => {
-      console.log('Connected to server');
-    };
-
-    ws.onmessage = (message) => {
-      const data = JSON.parse(message.data);
-      // Handle server messages
-      console.log('Received message:', data);
-    };
-
-    return ws;
-  },
-});
