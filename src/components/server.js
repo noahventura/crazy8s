@@ -26,6 +26,8 @@ const io = new Server(server, {
   }
 });
 
+let gameRooms = {}; // Object to store game rooms, keyed by room ID
+
 let gameState = {
   gameStarted: false,
   gameOver: false,
@@ -51,6 +53,37 @@ io.on('connection', (socket) => {
         console.log('Player joined the lobby:', playerData);
         gameState.lobby.push(playerData); 
         io.emit('LOBBY_UPDATED', gameState.lobby);
+    });
+    
+    socket.on('CREATE_GAME_ROOM', (playerData) => {
+        const roomId = uuidv4(); // Generate a unique ID for the room
+        gameRooms[roomId] = {
+            gameState: { 
+                gameStarted: false,
+                gameOver: false,
+                currentRank: '',
+                currentSuit: '',
+                topDiscardCard: null,
+                selectingSuit: false,
+                deck: [],
+                discardPile: [],
+            },
+            players: [playerData] // Add the creating player to the room
+        };
+        socket.join(roomId); // Make the socket join the room
+        socket.emit('ROOM_CREATED', { roomId }); // Send the room ID back to the client
+        console.log('Game room created with ID:', roomId);
+    });
+
+    socket.on('JOIN_GAME_ROOM', ({ roomId, playerData }) => {
+        if (gameRooms[roomId]) {
+            gameRooms[roomId].players.push(playerData);
+            socket.join(roomId); 
+            io.to(roomId).emit('PLAYER_JOINED', playerData); // Notify everyone in the room
+            console.log('Player joined room:', roomId);
+        } else {
+            socket.emit('ROOM_NOT_FOUND'); // Notify the client if the room doesn't exist
+        }
     });
 
     socket.on('START_GAME', () => {
