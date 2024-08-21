@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-
+const { v4: uuidv4 } = require('uuid');
 const app = express();
 
 const corsOptions = {
@@ -28,112 +28,127 @@ const io = new Server(server, {
 
 let gameRooms = {}; // Object to store game rooms, keyed by room ID
 
-let gameState = {
-  gameStarted: false,
-  gameOver: false,
-  currentRank: '',
-  currentSuit: '',
-  topDiscardCard: null,
-  selectingSuit: false,
-  players: [
-    {
-      id: 1,
-      hand: [],
-    },
-  ],
-  deck: [],
-  discardPile: [],
-  lobby:[],
-};
 
 io.on('connection', (socket) => {
     console.log('a user connected', socket.id);
 
-    socket.on('JOIN_LOBBY', (playerData) =>{
-        console.log('Player joined the lobby:', playerData);
-        gameState.lobby.push(playerData); 
-        io.emit('LOBBY_UPDATED', gameState.lobby);
-    });
     
     socket.on('CREATE_GAME_ROOM', (playerData) => {
-        const roomId = uuidv4(); // Generate a unique ID for the room
+        const roomId = uuidv4();
         gameRooms[roomId] = {
-            gameState: { 
-                gameStarted: false,
-                gameOver: false,
-                currentRank: '',
-                currentSuit: '',
-                topDiscardCard: null,
-                selectingSuit: false,
-                deck: [],
-                discardPile: [],
-            },
-            players: [playerData] // Add the creating player to the room
-        };
-        socket.join(roomId); // Make the socket join the room
-        socket.emit('ROOM_CREATED', { roomId }); // Send the room ID back to the client
+        gameState: {
+        gameStarted: false,
+        gameOver: false,
+        currentRank: '',
+        currentSuit: '',
+        topDiscardCard: null,
+        selectingSuit: false,
+        deck: [],
+        discardPile: [],
+        lobby: [playerData] // Add the first player to the room's lobby
+        },
+        players: [], // Initialize players array for the game
+    };
+        socket.join(roomId);
+        socket.emit('ROOM_CREATED', { roomId });
         console.log('Game room created with ID:', roomId);
+        io.to(roomId).emit('GAME_STATE_UPDATE', gameRooms[roomId].gameState);
     });
 
     socket.on('JOIN_GAME_ROOM', ({ roomId, playerData }) => {
+        console.log('JOIN_GAME_ROOM event received - Server'); 
+        console.log('roomId:', roomId);
+        console.log('playerData:', playerData); 
+    
         if (gameRooms[roomId]) {
-            gameRooms[roomId].players.push(playerData);
-            socket.join(roomId); 
-            io.to(roomId).emit('PLAYER_JOINED', playerData); // Notify everyone in the room
-            console.log('Player joined room:', roomId);
+          playerData.socketId = socket.id;
+          gameRooms[roomId].gameState.lobby.push(playerData); 
+          socket.join(roomId);
+          socket.to(roomId).emit('PLAYER_JOINED', playerData);
+          console.log('Player joined room:', roomId);
+    
+          io.to(roomId).emit('GAME_STATE_UPDATE', gameRooms[roomId].gameState);
         } else {
-            socket.emit('ROOM_NOT_FOUND'); // Notify the client if the room doesn't exist
+          socket.emit('ROOM_NOT_FOUND');
         }
-    });
+      });
 
     socket.on('START_GAME', () => {
-        console.log('START_GAME event received from client:', socket.id);
-        if(gameState.gameStarted){
-            return
+        const roomId = Array.from(socket.rooms)[1];
+        const currentRoom = gameRooms[roomId];
+    
+        if (!currentRoom) {
+          console.error('Room not found:', roomId);
+          return; 
         }
-
-        const requiredPlayers = 1; // min player count
-        if (gameState.lobby.length < requiredPlayers) {
-          console.log('Not enough players in the lobby to start the game.');
-          socket.emit('NOT_ENOUGH_PLAYERS'); // Optional client notification
-          return;
+    
+        let gameState = currentRoom.gameState; // Access gameState for the room
+    
+        console.log('START_GAME event received from client:', socket.id, 'in room', roomId);
+        if (gameState.gameStarted) {
+          return; 
         }
+    
+        // Move players from the room's lobby to players
+        gameState.players = [...gameState.lobby];
+        gameState.lobby = []; 
 
-        gameState.players = gameState.lobby; 
-        gameState.lobby = []; // Clear the lobby
-        
         gameState.gameStarted = true;
         gameState.deck = shuffleDeck();
         dealCards(gameState.players, gameState.deck);
         gameState.topDiscardCard = gameState.deck.pop();
         gameState.currentRank = gameState.topDiscardCard.rank;
         gameState.currentSuit = gameState.topDiscardCard.suit;
-        io.emit('GAME_STATE_UPDATE', gameState);
-  });
 
-  socket.on('DRAW_CARD', () => {
-    console.log('DRAW_CARD event received from client:', socket.id);
+        io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
+      });
+    
 
-    if (gameState.deck.length === 0) {
-      // Reshuffle discard pile (except the top card)
-      const topDiscard = gameState.discardPile.pop();
-      gameState.deck = shuffleDeck(gameState.discardPile);
-      gameState.discardPile = [topDiscard];
-    }
+      socket.on('DRAW_CARD', () => {
+        const roomId = Array.from(socket.rooms)[1];
+        const currentRoom = gameRooms[roomId];
+    
+        if (!currentRoom) {
+          console.error('Room not found:', roomId);
+          return;
+        }
+    
+        let gameState = currentRoom.gameState;
+    
+        console.log('DRAW_CARD event received from client:', socket.id, 'in room', roomId);
+    
+        if (gameState.deck.length === 0) {
+          // Reshuffle discard pile (except the top card)
+          const topDiscard = gameState.discardPile.pop();
+          gameState.deck = shuffleDeck(gameState.discardPile);
+          gameState.discardPile = [topDiscard];
+        }
+    
+        if (gameState.deck.length > 0) {
+            gameState.players[gameState.currentPlayer].hand.push(gameState.deck.pop());
+            io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
+        }
+      });
 
-    if (gameState.deck.length > 0) {
-      gameState.players[0].hand.push(gameState.deck.pop());
-      io.emit('GAME_STATE_UPDATE', gameState);
-    }
-  });
 
   socket.on('PLAY_CARD', (data) => {
+    const roomId = Array.from(socket.rooms)[1];
+    const currentRoom = gameRooms[roomId];
+
+    if (!currentRoom) {
+      console.error('Room not found:', roomId);
+      return; 
+    }
+
+    let gameState = currentRoom.gameState; 
     const playerId = data.playerId;
     const cardIndex = data.cardIndex;
-    console.log('PLAY_CARD event received:', playerId, cardIndex);
-    console.log('Current game state (before play):', gameState); 
 
-    const player = gameState.players[0]; // Always player 0 in single-player
+
+    console.log('PLAY_CARD event received:', playerId, cardIndex, 'in room', roomId);
+    console.log('Current game state (before play):', gameState);
+
+    const player = gameState.players.find(p => p.id === playerId);
 
     if (player && player.hand.length > cardIndex) {
       const playedCard = player.hand.splice(cardIndex, 1)[0];
@@ -162,7 +177,7 @@ io.on('connection', (socket) => {
             gameState.gameOver = true;
             //handle game over 
           }
-
+          gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length; 
         console.log('Game state after update:', gameState);
         io.emit('GAME_STATE_UPDATE', gameState); 
       } else {
@@ -178,13 +193,23 @@ io.on('connection', (socket) => {
   });
 
   socket.on('SET_SUIT', ({ newSuit }) => {
-    console.log('SET_SUIT event received from client:', socket.id);
+    const roomId = Array.from(socket.rooms)[1]; 
+    const currentRoom = gameRooms[roomId];
+
+    if (!currentRoom) {
+      console.error('Room not found:', roomId);
+      return; 
+    }
+
+    let gameState = currentRoom.gameState; 
+    console.log('SET_SUIT event received from client:', socket.id, 'in room', roomId);
     gameState.currentSuit = newSuit;
     gameState.currentRank = '';
     gameState.selectingSuit = false;
-    // No need to update currentPlayer in single player
-    io.emit('GAME_STATE_UPDATE', gameState);
+
+    io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
   });
+
   socket.on('CHECK_GAME_OVER', (data) => {
     const playerId = data.playerId;
     const player = gameState.players.find(p => p.id === playerId);

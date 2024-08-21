@@ -7,28 +7,36 @@ import { v4 as uuidv4 } from 'uuid';
 
 const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 
+
 const GameBoard = () => { 
   const { state, dispatch, setSelectingSuit,socket,isConnected } = useGameContext();
   const [playerName, setPlayerName] = useState('');
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
+  const [roomId, setRoomId] = useState(''); // State to store the room ID
 
   useEffect(() => {
   
     if (socket){
-    socket.on('connect', () => {
-      console.log('Connected to server from GameBoard'); 
-      //setIsConnected(true);
-      console.log('Socket object:',socket)
-    });
+      socket.on('connect', () => {
+        console.log('Connected to server from GameBoard'); 
+        //setIsConnected(true);
+        console.log('Socket object:',socket)
+      });
   
-    socket.on('disconnect', () => {
-      console.log('Disconnected from server');
-      //setIsConnected(false);
-    });
-    
-    socket.on('LOBBY_UPDATED', (lobbyData) => {
-      setLobbyPlayers(lobbyData); 
-    });
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        //setIsConnected(false);
+      });
+
+      socket.on('LOBBY_UPDATED', (lobbyData) => {
+        setLobbyPlayers(lobbyData); 
+      });
+      socket.on('ROOM_CREATED', (data) => {
+        const receivedRoomId = data.roomId;
+       console.log('Room created with ID:', receivedRoomId);
+
+      // ... display the receivedRoomId to the user (e.g., using an alert or by setting state) 
+      });
     // Cleanup on component unmount
     return () => { 
       if (socket){
@@ -47,15 +55,35 @@ const GameBoard = () => {
     }
   }, [isConnected, socket]);
 
-  const joinLobby = () =>{
-    if (isConnected && socket){
-      if (playerName) {
-        const playerId = uuidv4(); // Generate playerId
-        const playerData = { id: playerId, name: playerName };
-        socket.emit('JOIN_LOBBY', playerData);
+  const handleCreateRoom = () => {
+    if (isConnected && socket && playerName) {
+      const playerData = { id: uuidv4(), name: playerName };
+      socket.emit('CREATE_GAME_ROOM', playerData); 
     }
-  }
-}
+  };
+  
+  const handleJoinRoom = () => {
+    if (isConnected && socket && roomId && playerName) {
+      const playerData = { id:uuidv4(), name: playerName };
+      socket.emit('JOIN_GAME_ROOM', { roomId, playerData });
+
+      console.log("Attempting to join room with ID:", roomId);
+
+    }
+      else {
+      // Provide user feedback if something is missing 
+      alert("Please enter both your name and a room ID.");
+    }
+  };
+
+  const joinLobby = () => {
+    if (isConnected && socket && playerName) {
+      const playerId = uuidv4();
+      const playerData = { id: playerId, name: playerName };
+      socket.emit('JOIN_GAME_ROOM', playerData); // Assuming 'JOIN_LOBBY' is your server event
+    }
+  };
+
   const startGame = () => {
     if (isConnected && socket) {
       console.log('Sending START_GAME event to server');
@@ -97,7 +125,18 @@ const GameBoard = () => {
             value={playerName}
             onChange={(e) => setPlayerName(e.target.value)}
           />
-          <button onClick={joinLobby}>Join Lobby</button>
+          <button onClick={handleCreateRoom}>Create Room</button>
+          <br />
+          <input 
+          type="text" 
+          placeholder="Enter room ID" 
+          value={roomId}
+          onChange={(e) => setRoomId(e.target.value)} 
+        />
+        <button onClick={handleJoinRoom} disabled={!playerName}>
+          Join Game
+        </button>
+        
           <h3>Players in Lobby:</h3>
           <ul>
             {lobbyPlayers.map((player) => (
