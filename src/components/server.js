@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 
 const corsOptions = {
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000','http://localhost:3001'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 };
@@ -21,7 +21,7 @@ app.get('/', (req, res) => {
 
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: ['http://localhost:3000','http://localhost:3001'],
     methods: ['GET', 'POST']
   }
 });
@@ -61,6 +61,7 @@ io.on('connection', (socket) => {
         console.log('playerData:', playerData); 
     
         if (gameRooms[roomId]) {
+        const playerId = playerData.id; 
           playerData.socketId = socket.id;
           gameRooms[roomId].gameState.lobby.push(playerData); 
           socket.join(roomId);
@@ -99,6 +100,8 @@ io.on('connection', (socket) => {
         gameState.topDiscardCard = gameState.deck.pop();
         gameState.currentRank = gameState.topDiscardCard.rank;
         gameState.currentSuit = gameState.topDiscardCard.suit;
+
+        gameState.currentPlayer = Math.floor(Math.random() * gameState.players.length);
 
         io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
       });
@@ -165,11 +168,11 @@ io.on('connection', (socket) => {
         gameState.topDiscardCard = playedCard;
 
         if (playedCard.rank === '8') {
-          gameState.selectingSuit = true; // Player needs to choose a suit
+          gameState.selectingSuit = true; //choose a suit
         } else {
           gameState.currentRank = playedCard.rank;
           gameState.currentSuit = playedCard.suit;
-          // No need to update currentPlayer in single-player
+          
         }
 
         if (player.hand.length === 0) {
@@ -181,11 +184,10 @@ io.on('connection', (socket) => {
         console.log('Game state after update:', gameState);
         io.emit('GAME_STATE_UPDATE', gameState); 
       } else {
-        // Invalid Play
         console.log('Invalid card play attempt:', playedCard);
         player.hand.push(playedCard); // Return the card to the hand
         console.log('Game state after invalid play:', gameState);
-        io.emit('GAME_STATE_UPDATE', gameState); // Update clients about invalid play
+        io.emit('GAME_STATE_UPDATE', gameState);
       }
     } else {
       console.log('Invalid play attempt - player or cardIndex not found.');
@@ -233,10 +235,10 @@ server.listen(8080, () => {
   console.log('listening on *:8080');
 });
 
-function shuffleDeck(cardsToShuffle = []) { // Allow shuffling an existing array
+function shuffleDeck(cardsToShuffle = []) { 
   const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
   const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  let deck = cardsToShuffle.length > 0 ? cardsToShuffle : []; // Use provided cards or create a new deck
+  let deck = cardsToShuffle.length > 0 ? cardsToShuffle : [];
 
   if (deck.length === 0) { 
     // Create a new deck if cardsToShuffle is empty
@@ -256,8 +258,10 @@ function shuffleDeck(cardsToShuffle = []) { // Allow shuffling an existing array
 
 function dealCards(players, deck) {
   const handSize = 7;
-  players[0].hand = [];
+  for (let player of players){
+  player.hand = [];
   for (let i = 0; i < handSize; i++) {
-    players[0].hand.push(deck.pop());
+    player.hand.push(deck.pop());
   }
+}
 }

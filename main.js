@@ -1,6 +1,7 @@
-// main.js
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+
+const PORT = process.env.PORT || 3000; // Use 3000 by default
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -11,7 +12,7 @@ function createWindow() {
     },
   });
 
-  win.loadURL('http://localhost:3000');
+  win.loadURL(`http://localhost:${PORT}`);
 }
 
 app.whenReady().then(() => {
@@ -29,4 +30,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-

@@ -11,6 +11,7 @@ const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
 const GameBoard = () => { 
   const { state, dispatch, setSelectingSuit,socket,isConnected } = useGameContext();
   const [playerName, setPlayerName] = useState('');
+  const [playerId, setPlayerId] = useState(null); 
   const [lobbyPlayers, setLobbyPlayers] = useState([]);
   const [roomId, setRoomId] = useState(''); // State to store the room ID
 
@@ -51,6 +52,7 @@ const GameBoard = () => {
     if (isConnected && socket) {
       socket.on('GAME_STATE_UPDATE', (newState) => {
         dispatch({ type: 'UPDATE_STATE', payload: newState });
+        setLobbyPlayers(newState.lobby);
       });
     }
   }, [isConnected, socket]);
@@ -64,7 +66,9 @@ const GameBoard = () => {
   
   const handleJoinRoom = () => {
     if (isConnected && socket && roomId && playerName) {
-      const playerData = { id:uuidv4(), name: playerName };
+      const newPlayerId = uuidv4(); // Generate ID on the client-side
+      setPlayerId(newPlayerId);
+      const playerData = { id: newPlayerId, name: playerName };
       socket.emit('JOIN_GAME_ROOM', { roomId, playerData });
 
       console.log("Attempting to join room with ID:", roomId);
@@ -76,13 +80,6 @@ const GameBoard = () => {
     }
   };
 
-  const joinLobby = () => {
-    if (isConnected && socket && playerName) {
-      const playerId = uuidv4();
-      const playerData = { id: playerId, name: playerName };
-      socket.emit('JOIN_GAME_ROOM', playerData); // Assuming 'JOIN_LOBBY' is your server event
-    }
-  };
 
   const startGame = () => {
     if (isConnected && socket) {
@@ -96,10 +93,10 @@ const GameBoard = () => {
   // *** Corrected drawCard and handleSuitSelection functions ***
   const drawCard = () => {
     console.log('Draw Card button clicked');
-    if (isConnected && socket) {
-      socket.emit('DRAW_CARD'); // Use socket.emit 
+    if (isConnected && socket&& playerId) {
+      socket.emit('DRAW_CARD',{playerId: playerId}); // Use socket.emit 
     } else {
-      console.log('WebSocket is not open yet!');
+      console.log('out of turn');
     }
   };
 
@@ -170,7 +167,7 @@ const GameBoard = () => {
               ) : (
                 <>
                   <div className="player-hand">
-                    <PlayerHand setSelectingSuit={setSelectingSuit}/>
+                    <PlayerHand playerId={playerId} setSelectingSuit={setSelectingSuit}/>
                   </div>
                   <button onClick={drawCard}>Draw Card</button>
                 </>
