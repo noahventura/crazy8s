@@ -3,10 +3,11 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
+
 const app = express();
 
 const corsOptions = {
-  origin: ['http://localhost:3000','http://localhost:3001'],
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 };
@@ -21,118 +22,152 @@ app.get('/', (req, res) => {
 
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:3000','http://localhost:3001'],
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
     methods: ['GET', 'POST']
   }
 });
 
+// GameRoom Class
+class GameRoom {
+  constructor(roomId) {
+    this.roomId = roomId;
+    this.gameState = {
+      gameStarted: false,
+      gameOver: false,
+      currentRank: '',
+      currentSuit: '',
+      topDiscardCard: null,
+      selectingSuit: false,
+      deck: [],
+      discardPile: [],
+      lobby: [],
+      players: [],
+      currentPlayer: 0
+    };
+  }
+
+  addPlayer(playerData) {
+    this.gameState.lobby.push(playerData);
+    console.log('bing!')
+  }
+
+  startGame() {
+    this.gameState.players = [...this.gameState.lobby];
+    console.log(this.gameState.players)
+    this.gameState.lobby = [];
+    this.gameState.gameStarted = true;
+    this.gameState.deck = shuffleDeck();
+    dealCards(this.gameState.players, this.gameState.deck);
+    this.gameState.topDiscardCard = this.gameState.deck.pop();
+    this.gameState.currentRank = this.gameState.topDiscardCard.rank;
+    this.gameState.currentSuit = this.gameState.topDiscardCard.suit;
+    this.gameState.currentPlayer = Math.floor(Math.random() * this.gameState.players.length);
+  }
+
+  drawCard() {
+    if (this.gameState.deck.length === 0) {
+      const topDiscard = this.gameState.discardPile.pop();
+      this.gameState.deck = shuffleDeck(this.gameState.discardPile);
+      this.gameState.discardPile = [topDiscard];
+    }
+    if (this.gameState.deck.length > 0) {
+      this.gameState.players[this.gameState.currentPlayer].hand.push(this.gameState.deck.pop());
+    }
+  }
+
+  playCard(playerId, cardIndex) {
+    const player = this.gameState.players.find(p => p.id === playerId);
+    if (player && player.hand.length > cardIndex) {
+      const playedCard = player.hand.splice(cardIndex, 1)[0];
+      if (this.isValidPlay(playedCard)) {
+        this.gameState.discardPile.push(playedCard);
+        this.gameState.topDiscardCard = playedCard;
+        this.updateCurrentPlayer();
+        return true; // Valid play
+      } else {
+        player.hand.push(playedCard); // Return the card to the hand
+      }
+    }
+    return false; // Invalid play attempt
+  }
+
+  isValidPlay(playedCard) {
+    return (
+      playedCard.rank === '8' ||
+      playedCard.rank === this.gameState.currentRank ||
+      playedCard.suit === this.gameState.currentSuit
+    );
+  }
+
+  updateCurrentPlayer() {
+    this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
+  }
+}
+
 let gameRooms = {}; // Object to store game rooms, keyed by room ID
 
-
 io.on('connection', (socket) => {
-    console.log('a user connected', socket.id);
+  console.log('a user connected', socket.id);
 
-    
-    socket.on('CREATE_GAME_ROOM', (playerData) => {
-        const roomId = uuidv4();
-        gameRooms[roomId] = {
-        gameState: {
-        gameStarted: false,
-        gameOver: false,
-        currentRank: '',
-        currentSuit: '',
-        topDiscardCard: null,
-        selectingSuit: false,
-        deck: [],
-        discardPile: [],
-        lobby: [playerData] // Add the first player to the room's lobby
-        },
-        players: [], // Initialize players array for the game
-    };
-        socket.join(roomId);
-        socket.emit('ROOM_CREATED', { roomId });
-        console.log('Game room created with ID:', roomId);
-        io.to(roomId).emit('GAME_STATE_UPDATE', gameRooms[roomId].gameState);
-    });
+  socket.on('CREATE_GAME_ROOM', (playerData) => {
+    playerData.socketId = socket.id; // Assign socket ID to player data
+    const roomId = uuidv4();
+    const gameRoom = new GameRoom(roomId);
+    gameRoom.addPlayer(playerData);
+    console.log('bong!')
+    gameRooms[roomId] = gameRoom;
 
-    socket.on('JOIN_GAME_ROOM', ({ roomId, playerData }) => {
-        console.log('JOIN_GAME_ROOM event received - Server'); 
-        console.log('roomId:', roomId);
-        console.log('playerData:', playerData); 
-    
-        if (gameRooms[roomId]) {
-        const playerId = playerData.id; 
-          playerData.socketId = socket.id;
-          gameRooms[roomId].gameState.lobby.push(playerData); 
-          socket.join(roomId);
-          socket.to(roomId).emit('PLAYER_JOINED', playerData);
-          console.log('Player joined room:', roomId);
-    
-          io.to(roomId).emit('GAME_STATE_UPDATE', gameRooms[roomId].gameState);
-        } else {
-          socket.emit('ROOM_NOT_FOUND');
-        }
-      });
+    socket.join(roomId);
+    socket.emit('ROOM_CREATED', { roomId });
+    console.log('Game room created with ID:', roomId);
+    io.to(roomId).emit('GAME_STATE_UPDATE', gameRoom.gameState);
+});
 
-    socket.on('START_GAME', () => {
-        const roomId = Array.from(socket.rooms)[1];
-        const currentRoom = gameRooms[roomId];
-    
-        if (!currentRoom) {
-          console.error('Room not found:', roomId);
-          return; 
-        }
-    
-        let gameState = currentRoom.gameState; // Access gameState for the room
-    
-        console.log('START_GAME event received from client:', socket.id, 'in room', roomId);
-        if (gameState.gameStarted) {
-          return; 
-        }
-    
-        // Move players from the room's lobby to players
-        gameState.players = [...gameState.lobby];
-        gameState.lobby = []; 
 
-        gameState.gameStarted = true;
-        gameState.deck = shuffleDeck();
-        dealCards(gameState.players, gameState.deck);
-        gameState.topDiscardCard = gameState.deck.pop();
-        gameState.currentRank = gameState.topDiscardCard.rank;
-        gameState.currentSuit = gameState.topDiscardCard.suit;
+socket.on('JOIN_GAME_ROOM', ({ roomId, playerData }) => {
+  if (gameRooms[roomId]) {
+    playerData.socketId = socket.id;
+    const playerId = playerData.id;
+    
+    gameRooms[roomId].addPlayer(playerData);
+    socket.join(roomId);
+    socket.to(roomId).emit('PLAYER_JOINED', playerData);
+    
+    console.log('Player joined room:', roomId);
+    
+    // Update all clients with the new game state
+    io.to(roomId).emit('GAME_STATE_UPDATE', gameRooms[roomId].gameState);
+  } else {
+    socket.emit('ROOM_NOT_FOUND');
+  }
+});
 
-        gameState.currentPlayer = Math.floor(Math.random() * gameState.players.length);
 
-        io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
-      });
-    
+  socket.on('START_GAME', () => {
+    const roomId = Array.from(socket.rooms)[1];
+    const currentRoom = gameRooms[roomId];
 
-      socket.on('DRAW_CARD', () => {
-        const roomId = Array.from(socket.rooms)[1];
-        const currentRoom = gameRooms[roomId];
-    
-        if (!currentRoom) {
-          console.error('Room not found:', roomId);
-          return;
-        }
-    
-        let gameState = currentRoom.gameState;
-    
-        console.log('DRAW_CARD event received from client:', socket.id, 'in room', roomId);
-    
-        if (gameState.deck.length === 0) {
-          // Reshuffle discard pile (except the top card)
-          const topDiscard = gameState.discardPile.pop();
-          gameState.deck = shuffleDeck(gameState.discardPile);
-          gameState.discardPile = [topDiscard];
-        }
-    
-        if (gameState.deck.length > 0) {
-            gameState.players[gameState.currentPlayer].hand.push(gameState.deck.pop());
-            io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
-        }
-      });
+    if (!currentRoom || currentRoom.gameState.gameStarted) {
+      console.error('Room not found or game already started:', roomId);
+      return;
+    }
 
+    currentRoom.startGame();
+    io.to(roomId).emit('GAME_STATE_UPDATE', currentRoom.gameState);
+  });
+
+  socket.on('DRAW_CARD', () => {
+    const roomId = Array.from(socket.rooms)[1];
+    const currentRoom = gameRooms[roomId];
+
+    if (!currentRoom) {
+      console.error('Room not found:', roomId);
+      return;
+    }
+
+    currentRoom.drawCard();
+    io.to(roomId).emit('GAME_STATE_UPDATE', currentRoom.gameState);
+  });
 
   socket.on('PLAY_CARD', (data) => {
     const roomId = Array.from(socket.rooms)[1];
@@ -140,67 +175,24 @@ io.on('connection', (socket) => {
 
     if (!currentRoom) {
       console.error('Room not found:', roomId);
-      return; 
+      return;
     }
 
-    let gameState = currentRoom.gameState; 
-    const playerId = data.playerId;
-    const cardIndex = data.cardIndex;
-
-
-    console.log('PLAY_CARD event received:', playerId, cardIndex, 'in room', roomId);
-    console.log('Current game state (before play):', gameState);
-
-    const player = gameState.players.find(p => p.id === playerId);
-
-    if (player && player.hand.length > cardIndex) {
-      const playedCard = player.hand.splice(cardIndex, 1)[0];
-      console.log('Played card:', playedCard);
-      console.log('Player hand after splice:', player.hand);
-
-      if (
-        playedCard.rank === '8' ||
-        playedCard.rank === gameState.currentRank ||
-        playedCard.suit === gameState.currentSuit
-      ) {
-        // Valid Play
-        gameState.discardPile.push(playedCard);
-        gameState.topDiscardCard = playedCard;
-
-        if (playedCard.rank === '8') {
-          gameState.selectingSuit = true; //choose a suit
-        } else {
-          gameState.currentRank = playedCard.rank;
-          gameState.currentSuit = playedCard.suit;
-          
-        }
-
-        if (player.hand.length === 0) {
-            console.log('Player', playerId, 'has won the game!');
-            gameState.gameOver = true;
-            //handle game over 
-          }
-          gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length; 
-        console.log('Game state after update:', gameState);
-        io.emit('GAME_STATE_UPDATE', gameState); 
-      } else {
-        console.log('Invalid card play attempt:', playedCard);
-        player.hand.push(playedCard); // Return the card to the hand
-        console.log('Game state after invalid play:', gameState);
-        io.emit('GAME_STATE_UPDATE', gameState);
-      }
+    const validPlay = currentRoom.playCard(data.playerId, data.cardIndex);
+    if (validPlay) {
+      io.to(roomId).emit('GAME_STATE_UPDATE', currentRoom.gameState);
     } else {
-      console.log('Invalid play attempt - player or cardIndex not found.');
+      console.log('Invalid play attempt');
     }
   });
 
   socket.on('SET_SUIT', ({ newSuit }) => {
-    const roomId = Array.from(socket.rooms)[1]; 
+    const roomId = Array.from(socket.rooms)[1];
     const currentRoom = gameRooms[roomId];
 
     if (!currentRoom) {
       console.error('Room not found:', roomId);
-      return; 
+      return;
     }
 
     let gameState = currentRoom.gameState; 
@@ -212,20 +204,6 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('GAME_STATE_UPDATE', gameState);
   });
 
-  socket.on('CHECK_GAME_OVER', (data) => {
-    const playerId = data.playerId;
-    const player = gameState.players.find(p => p.id === playerId);
-  
-    if (player && player.hand.length === 0) {
-      console.log('Player', playerId, 'has won the game!');
-      gameState.gameOver = true; 
-      // reset game
-  
-      io.emit('GAME_STATE_UPDATE', gameState);
-    } 
-
-  });
-
   socket.on('disconnect', () => {
     console.log('user disconnected', socket.id);
   });
@@ -235,12 +213,12 @@ server.listen(8080, () => {
   console.log('listening on *:8080');
 });
 
-function shuffleDeck(cardsToShuffle = []) { 
+function shuffleDeck(cardsToShuffle = []) {
   const suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
   const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
   let deck = cardsToShuffle.length > 0 ? cardsToShuffle : [];
 
-  if (deck.length === 0) { 
+  if (deck.length === 0) {
     // Create a new deck if cardsToShuffle is empty
     for (let suit of suits) {
       for (let rank of ranks) {
@@ -258,10 +236,10 @@ function shuffleDeck(cardsToShuffle = []) {
 
 function dealCards(players, deck) {
   const handSize = 7;
-  for (let player of players){
-  player.hand = [];
-  for (let i = 0; i < handSize; i++) {
-    player.hand.push(deck.pop());
+  for (let player of players) {
+    player.hand = [];
+    for (let i = 0; i < handSize; i++) {
+      player.hand.push(deck.pop());
+    }
   }
-}
 }
